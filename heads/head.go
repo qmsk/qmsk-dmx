@@ -1,79 +1,16 @@
 package heads
 
 import (
-	"fmt"
-
 	"github.com/qmsk/dmx"
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/dmx/logging"
 	"github.com/qmsk/go-web"
 )
 
-// Config type
-type TypeID string
+type heads map[api.HeadID]*Head
 
-type HeadType struct {
-	Vendor string
-	Model  string
-	Mode   string
-	URL    string
-
-	Channels []ChannelType
-	Colors   ColorMap
-}
-
-func (headType HeadType) String() string {
-	return fmt.Sprintf("%v/%v=%v", headType.Vendor, headType.Model, headType.Mode)
-}
-
-func (headType HeadType) IsColor() bool {
-	for _, channelType := range headType.Channels {
-		if channelType.Color != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// Config
-type HeadID string
-
-func (headID HeadID) index(index uint) HeadID {
-	return HeadID(fmt.Sprintf("%s.%d", headID, index+1))
-}
-
-type HeadConfig struct {
-	Type     TypeID
-	Universe Universe
-	Address  dmx.Address
-	Name     string
-	Count    uint // Clone multiple copies of the head at id.N
-	Groups   []GroupID
-
-	headType *HeadType
-}
-
-// Number of channels used by head for count indexing
-func (headConfig HeadConfig) step() uint {
-	return uint(len(headConfig.headType.Channels))
-}
-
-// Return an indexed copy of the head, step addresses ahead
-func (headConfig HeadConfig) index(index uint) HeadConfig {
-	// copy
-	var indexed HeadConfig = headConfig
-
-	indexed.Address = indexed.Address + dmx.Address(index*headConfig.step())
-
-	return indexed
-}
-
-// Top-level map
-type headMap map[HeadID]*Head
-
-type APIHeads map[HeadID]APIHead
-
-func (heads headMap) makeAPI() APIHeads {
-	var apiHeads = make(APIHeads)
+func (heads heads) makeAPI() api.Heads {
+	var apiHeads = make(api.Heads)
 
 	for headID, head := range heads {
 		apiHeads[headID] = head.makeAPI()
@@ -81,84 +18,48 @@ func (heads headMap) makeAPI() APIHeads {
 	return apiHeads
 }
 
-type headList headMap
-
-func (heads headList) GetREST() (web.Resource, error) {
-	var apiHeads []APIHead
+func (heads heads) makeAPIList() []api.Head {
+	var apiHeads = make([]api.Head, 0, len(heads))
 
 	for _, head := range heads {
 		apiHeads = append(apiHeads, head.makeAPI())
 	}
 
-	return apiHeads, nil
+	return apiHeads
 }
 
-func (headMap headMap) Index(name string) (web.Resource, error) {
-	switch name {
-	case "":
-		return headList(headMap), nil
-	default:
-		return headMap[HeadID(name)], nil
-	}
+type headsView struct {
+	heads heads
 }
 
-func (headMap headMap) GetREST() (web.Resource, error) {
-	return headMap.makeAPI(), nil
-}
-
-// Channels
-type HeadChannels map[ChannelType]*Channel
-
-func (headChannels HeadChannels) GetID(id string) *Channel {
-	for channelType, channel := range headChannels {
-		if channelType.String() == id {
-			return channel
-		}
-	}
-
-	return nil
-}
-
-func (headChannels HeadChannels) makeAPI() APIChannels {
-	var apiChannels = make(APIChannels)
-
-	for channelType, channel := range headChannels {
-		apiChannels[channelType.String()] = channel.makeAPI()
-	}
-
-	return apiChannels
-}
-
-func (headChannels HeadChannels) GetREST() (web.Resource, error) {
-	return headChannels.makeAPI(), nil
-}
-
-func (headChannels HeadChannels) Index(name string) (web.Resource, error) {
-	if channel := headChannels.GetID(name); channel == nil {
-		return nil, nil
+func (view headsView) Index(name string) (web.Resource, error) {
+	if name == "" {
+		return view, nil
+	} else if head := view.heads[api.HeadID(name)]; head != nil {
+		return headView{head: head}, nil
 	} else {
-		return web.GetPostResource(channel), nil
+		return nil, nil
 	}
 }
 
-type HeadParameters struct {
-	Intensity *HeadIntensity `json:"intensity,omitempty"`
-	Color     *HeadColor     `json:"color,omitempty"`
+func (view headsView) GetREST() (web.Resource, error) {
+	return view.heads.makeAPIList(), nil
 }
 
 // A single DMX receiver using multiple consecutive DMX channels from a base address within a single universe
 type Head struct {
 	log logging.Logger
 
-	id       HeadID
-	config   HeadConfig
-	headType *HeadType
+	id       api.HeadID
+	config   api.HeadConfig
+	headType api.HeadType
 	output   *Output
 	events   Events
-	groups   groupMap
+	groups   groups
 
-	channels   HeadChannels
-	parameters HeadParameters
+	channels  channels
+	intensity *HeadIntensity
+	color     *HeadColor
 }
 
 func (head *Head) String() string {
@@ -174,27 +75,28 @@ func (head *Head) Name() string {
 }
 
 func (head *Head) init() {
-	head.channels = make(HeadChannels)
+	head.channels = make(channels)
 
-	for channelIndex, channelType := range head.headType.Channels {
+	for index, channelConfig := range head.headType.Channels {
 		var channel = &Channel{
-			channelType: channelType,
-			index:       uint(channelIndex),
-			output:      head.output,
-			address:     head.config.Address + dmx.Address(channelIndex),
+			id:      channelConfig.ID(),
+			config:  channelConfig,
+			index:   uint(index),
+			output:  head.output,
+			address: dmx.Address(head.config.Address) + dmx.Address(index),
 		}
 
 		channel.init()
 
-		head.channels[channelType] = channel
+		head.channels[channel.id] = channel
 	}
 
-	// set parameters
-	if headIntensity := head.getIntensity(); headIntensity.exists() {
-		head.parameters.Intensity = &headIntensity
+	// setup parameters
+	if headIntensity := head.Intensity(); headIntensity.exists() {
+		head.intensity = &headIntensity
 	}
-	if headColor := head.getColor(); headColor.exists() {
-		head.parameters.Color = &headColor
+	if headColor := head.Color(); headColor.exists() {
+		head.color = &headColor
 	}
 }
 
@@ -203,129 +105,126 @@ func (head *Head) initGroup(group *Group) {
 	head.groups[group.id] = group
 }
 
-func (head *Head) getChannel(channelType ChannelType) *Channel {
-	return head.channels[channelType]
+func (head *Head) Channel(config api.ChannelConfig) *Channel {
+	return head.channels[config.ID()]
 }
 
-func (head *Head) getIntensity() HeadIntensity {
+func (head *Head) Intensity() HeadIntensity {
 	return HeadIntensity{
-		channel: head.getChannel(ChannelType{Intensity: true}),
+		channel: head.Channel(api.ChannelConfig{Intensity: true}),
 	}
 }
 
-func (head *Head) getColor() HeadColor {
+func (head *Head) Color() HeadColor {
 	return HeadColor{
-		red:       head.getChannel(ChannelType{Color: ColorChannelRed}),
-		green:     head.getChannel(ChannelType{Color: ColorChannelGreen}),
-		blue:      head.getChannel(ChannelType{Color: ColorChannelBlue}),
-		intensity: head.getChannel(ChannelType{Intensity: true}),
+		red:       head.Channel(api.ChannelConfig{Color: api.ChannelColorRed}),
+		green:     head.Channel(api.ChannelConfig{Color: api.ChannelColorGreen}),
+		blue:      head.Channel(api.ChannelConfig{Color: api.ChannelColorBlue}),
+		intensity: head.Channel(api.ChannelConfig{Intensity: true}),
 	}
 }
 
-func (head *Head) Parameters() HeadParameters {
-	return head.parameters
-}
-
-// Web API GET
-type APIHead struct {
-	ID     HeadID
-	Config HeadConfig
-	Type   *HeadType
-
-	Channels  map[string]APIChannel `json:",omitempty"`
-	Intensity *APIIntensity         `json:",omitempty"`
-	Color     *APIColor             `json:",omitempty"`
-}
-
-func (head *Head) makeAPI() APIHead {
-	return APIHead{
+func (head *Head) makeAPI() api.Head {
+	var apiHead = api.Head{
 		ID:     head.id,
 		Config: head.config,
 		Type:   head.headType,
 
-		Channels:  head.channels.makeAPI(),
-		Intensity: head.parameters.Intensity.makeAPI(),
-		Color:     head.parameters.Color.makeAPI(),
+		Channels: head.channels.makeAPI(),
 	}
+
+	if head.intensity != nil {
+		var intensity = head.intensity.GetIntensity()
+
+		apiHead.Intensity = &intensity
+	}
+
+	if head.color != nil {
+		var color = head.color.GetColor()
+
+		apiHead.Color = &color
+	}
+
+	return apiHead
 }
 
-func (head *Head) GetREST() (web.Resource, error) {
-	return head.makeAPI(), nil
-}
+func (head *Head) applyAPI(params api.HeadParams) error {
+	head.log.Info("Apply: %#v", params)
 
-// Web API POST
-type APIHeadParams struct {
-	head *Head
-
-	Channels  map[string]APIChannelParams `json:",omitempty"`
-	Intensity *APIIntensity               `json:",omitempty"`
-	Color     *APIColor                   `json:",omitempty"`
-}
-
-func (head *Head) PostREST() (web.Resource, error) {
-	// parameters only, not configuration
-	return &APIHeadParams{head: head}, nil
-}
-
-func (post *APIHeadParams) Apply() error {
-	post.head.log.Info("Apply parameters: %#v", post)
-
-	for channelID, channelParams := range post.Channels {
-		if channel := post.head.channels.GetID(channelID); channel == nil {
-			return web.Errorf(404, "Channel not found: %v", channelID)
+	for channelID, channelParams := range params.Channels {
+		if channel := head.channels[channelID]; channel == nil {
+			return web.Errorf(422, "No channel for head %v: %v", head.id, channelID)
 		} else {
-			channelParams.channel = channel
-		}
-
-		if err := channelParams.Apply(); err != nil {
-			return err
+			channel.SetChannel(channelParams)
 		}
 	}
 
-	if post.Intensity != nil {
-		if err := post.Intensity.initHead(post.head.parameters.Intensity); err != nil {
-			return web.RequestError(err)
-		} else if err := post.Intensity.Apply(); err != nil {
-			return err
+	if params.Intensity != nil {
+		if head.intensity == nil {
+			return web.Errorf(422, "No intensity for head %v", head.id)
+		} else {
+			head.intensity.SetIntensity(*params.Intensity)
 		}
 	}
 
-	if post.Color != nil {
-		if err := post.Color.initHead(post.head.parameters.Color); err != nil {
-			return web.RequestError(err)
-		} else if err := post.Color.Apply(); err != nil {
-			return err
+	if params.Color != nil {
+		if head.color == nil {
+			return web.Errorf(422, "No color for head %v", head.id)
+		} else {
+			head.color.SetColor(*params.Color)
 		}
 	}
 
 	return nil
 }
 
-func (head *Head) Index(name string) (web.Resource, error) {
+func (head *Head) update() error {
+	head.log.Info("Apply")
+
+	head.output.Refresh()
+
+	head.events.update(api.Event{
+		Heads:  api.Heads{head.id: head.makeAPI()},
+		Groups: head.groups.makeAPI(),
+	})
+
+	return nil
+}
+
+// GET /heads/:id => api.Head
+type headView struct {
+	head   *Head
+	params api.HeadParams
+}
+
+func (view *headView) Index(name string) (web.Resource, error) {
 	switch name {
 	case "":
-		return head, nil
+		return view, nil
 	case "channels":
-		return head.channels, nil
+		return &channelsView{view.head.channels}, nil
 	case "intensity":
-		return head.parameters.Intensity, nil
+		return &intensityView{handler: view.head.intensity}, nil
 	case "color":
-		return head.parameters.Color, nil
+		return &colorView{handler: view.head.color}, nil
 	default:
 		return nil, nil
 	}
 }
 
-// Web API Events
-func (head *Head) Apply() error {
-	head.log.Info("Apply")
+func (view *headView) IntoREST() interface{} {
+	return &view.params
+}
 
-	head.events.update(APIEvents{
-		Heads: APIHeads{
-			head.id: head.makeAPI(),
-		},
-		Groups: head.groups.makeAPI(),
-	})
-
-	return nil
+func (view *headView) GetREST() (web.Resource, error) {
+	return view.head.makeAPI(), nil
+}
+func (view *headView) PostREST() (web.Resource, error) {
+	if err := view.head.applyAPI(view.params); err != nil {
+		return nil, err
+	} else if err := view.head.update(); err != nil {
+		return nil, err
+	} else {
+		return view.head.makeAPI(), nil
+	}
 }

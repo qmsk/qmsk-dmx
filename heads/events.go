@@ -1,63 +1,60 @@
 package heads
 
 import (
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/dmx/logging"
 	"github.com/qmsk/go-web"
 )
 
 // WebSocket handler
-func (heads *Heads) WebEvents() web.Events {
-	heads.events.eventChan = make(chan web.Event)
+func (controller *Controller) WebEvents() web.Events {
+	controller.events.eventChan = make(chan web.Event)
 
 	return web.MakeEvents(web.EventConfig{
-		EventPush: heads.events.eventChan,
+		EventPush: controller.events.eventChan,
 		StateFunc: func() web.State {
-			heads.log.Info("WebEvents State request")
+			controller.log.Info("WebEvents State request")
 
 			// must be goroutine-safe
-			return heads.makeAPI()
+			return controller.makeAPI()
 		},
 	})
 }
 
-type APIEvents struct {
-	Outputs APIOutputs
-	Heads   APIHeads
-	Groups  APIGroups
-}
+type eventBuilder api.Event
 
-func (event *APIEvents) addHead(head *Head) {
-	if event.Heads == nil {
-		event.Heads = APIHeads{head.id: head.makeAPI()}
+func (eventBuilder *eventBuilder) addHead(head *Head) {
+	if eventBuilder.Heads == nil {
+		eventBuilder.Heads = api.Heads{head.id: head.makeAPI()}
 	} else {
-		event.Heads[head.id] = head.makeAPI()
+		eventBuilder.Heads[head.id] = head.makeAPI()
 	}
 }
 
-func (event *APIEvents) addHeads(heads headMap) {
-	if event.Heads == nil {
-		event.Heads = heads.makeAPI()
+func (eventBuilder *eventBuilder) addHeads(heads heads) {
+	if eventBuilder.Heads == nil {
+		eventBuilder.Heads = heads.makeAPI()
 	} else {
 		for headID, head := range heads {
-			event.Heads[headID] = head.makeAPI()
+			eventBuilder.Heads[headID] = head.makeAPI()
 		}
 	}
 }
 
-func (events *APIEvents) addGroup(group *Group) {
-	if events.Groups == nil {
-		events.Groups = APIGroups{group.id: group.makeAPI()}
+func (eventBuilder *eventBuilder) addGroup(group *Group) {
+	if eventBuilder.Groups == nil {
+		eventBuilder.Groups = api.Groups{group.id: group.makeAPI()}
 	} else {
-		events.Groups[group.id] = group.makeAPI()
+		eventBuilder.Groups[group.id] = group.makeAPI()
 	}
 }
 
-func (event *APIEvents) addGroups(groups groupMap) {
-	if event.Groups == nil {
-		event.Groups = groups.makeAPI()
+func (eventBuilder *eventBuilder) addGroups(groups groups) {
+	if eventBuilder.Groups == nil {
+		eventBuilder.Groups = groups.makeAPI()
 	} else {
 		for groupID, group := range groups {
-			event.Groups[groupID] = group.makeAPI()
+			eventBuilder.Groups[groupID] = group.makeAPI()
 		}
 	}
 }
@@ -68,7 +65,7 @@ type events struct {
 }
 
 // push update events via websocket
-func (events *events) update(event APIEvents) {
+func (events *events) update(event api.Event) {
 	if events.eventChan != nil {
 		events.log.Infof("update")
 		events.eventChan <- event
@@ -76,5 +73,5 @@ func (events *events) update(event APIEvents) {
 }
 
 type Events interface {
-	update(event APIEvents)
+	update(event api.Event)
 }

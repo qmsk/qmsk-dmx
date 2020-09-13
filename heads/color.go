@@ -1,52 +1,13 @@
 package heads
 
 import (
-	"fmt"
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/go-web"
 )
 
-// Config Channels
-type ColorChannel string
-
-const (
-	ColorChannelRed   = "red"
-	ColorChannelGreen = "green"
-	ColorChannelBlue  = "blue"
-)
-
-// Config
-type ColorID string
-
-type ColorMap map[ColorID]Color
-
-// Merge in new colors from given map
-// Preserves existing colors
-func (colorMap ColorMap) Merge(mergeMap ColorMap) {
-	for colorID, color := range mergeMap {
-		if _, exists := colorMap[colorID]; !exists {
-			colorMap[colorID] = color
-		}
-	}
-}
-
-// Types
-type Color struct {
-	Red   Value
-	Green Value
-	Blue  Value
-}
-
-func (color Color) IsZero() bool {
-	return color.Red == 0.0 && color.Green == 0.0 && color.Blue == 0.0
-}
-
-// Linear RGB intensity scaling
-func (color Color) ScaleIntensity(intensity Intensity) Color {
-	return Color{
-		Red:   color.Red * Value(intensity),
-		Green: color.Green * Value(intensity),
-		Blue:  color.Blue * Value(intensity),
-	}
+type ColorHandler interface {
+	GetColor() api.Color
+	SetColor(api.ColorParams) api.Color
 }
 
 // Head.Color
@@ -61,7 +22,7 @@ func (it HeadColor) exists() bool {
 	return it.red != nil || it.green != nil || it.blue != nil
 }
 
-func (hc HeadColor) Get() (color Color) {
+func (hc HeadColor) GetColor() (color api.Color) {
 	if hc.red != nil {
 		color.Red = hc.red.GetValue()
 	}
@@ -74,7 +35,7 @@ func (hc HeadColor) Get() (color Color) {
 	return
 }
 
-func (hc HeadColor) Set(color Color) Color {
+func (hc HeadColor) setColor(color api.Color) api.Color {
 	if hc.red != nil {
 		color.Red = hc.red.SetValue(color.Red)
 	}
@@ -88,36 +49,27 @@ func (hc HeadColor) Set(color Color) Color {
 }
 
 // Set color with intensity, using either head intensity channel or linear RGB scaling
-func (hc HeadColor) SetIntensity(color Color, intensity Intensity) {
+func (hc HeadColor) setIntensity(color api.Color, intensity api.Value) api.Color {
 	if hc.intensity != nil {
-		hc.Set(color)
-		hc.intensity.SetValue(Value(intensity))
+		hc.setColor(color)
+		hc.intensity.SetValue(intensity)
+		return color
 	} else {
-		hc.Set(color.ScaleIntensity(intensity))
+		return hc.setColor(color.Scale(intensity))
 	}
 }
 
-func (headColor *HeadColor) makeAPI() *APIColor {
-	if headColor == nil {
-		return nil
+func (hc HeadColor) SetColor(params api.ColorParams) api.Color {
+	if params.ScaleIntensity != nil {
+		return hc.setIntensity(params.Color, *params.ScaleIntensity)
+	} else {
+		return hc.setColor(params.Color)
 	}
-
-	return &APIColor{
-		headColor: headColor,
-		Color:     headColor.Get(),
-	}
-}
-
-func (headColor HeadColor) GetREST() (web.Resource, error) {
-	return headColor.makeAPI(), nil
-}
-func (headColor HeadColor) PostREST() (web.Resource, error) {
-	return headColor.makeAPI(), nil
 }
 
 // Group.Color
 type GroupColor struct {
-	headColors map[HeadID]HeadColor
+	headColors map[api.HeadID]HeadColor
 }
 
 func (groupColor GroupColor) exists() bool {
@@ -125,82 +77,39 @@ func (groupColor GroupColor) exists() bool {
 }
 
 // Return one color for the group
-func (groupColor GroupColor) Get() (color Color) {
+func (groupColor GroupColor) GetColor() (color api.Color) {
 	for _, headColor := range groupColor.headColors {
 		// This works fine assuming they are all the same color :)
-		return headColor.Get()
+		return headColor.GetColor()
 	}
 
 	return
 }
 
-func (groupColor GroupColor) Set(color Color) Color {
+func (groupColor GroupColor) SetColor(params api.ColorParams) api.Color {
+	var color api.Color
+
 	for _, headColor := range groupColor.headColors {
-		headColor.Set(color)
+		color = headColor.SetColor(params)
 	}
 
 	return color
 }
 
-func (groupColor *GroupColor) makeAPI() *APIColor {
-	if groupColor == nil {
-		return nil
-	}
-
-	return &APIColor{
-		groupColor: groupColor,
-		Color:      groupColor.Get(),
-	}
+// API
+type colorView struct {
+	handler ColorHandler
+	params  api.ColorParams
 }
 
-// Web API
-type APIColor struct {
-	headColor  *HeadColor
-	groupColor *GroupColor
-
-	ScaleIntensity *Intensity
-	Color
+func (view *colorView) IntoREST() interface{} {
+	return &view.params
 }
 
-func (apiColor APIColor) IsZero() bool {
-	return apiColor.Color.IsZero()
-}
-func (apiColor APIColor) Equals(other APIColor) bool {
-	return apiColor.Color == other.Color
+func (view *colorView) GetREST() (web.Resource, error) {
+	return view.handler.GetColor(), nil
 }
 
-func (apiColor *APIColor) initHead(headColor *HeadColor) error {
-	if headColor == nil {
-		return fmt.Errorf("Head does not support color")
-	}
-
-	apiColor.headColor = headColor
-
-	return nil
-}
-
-func (apiColor *APIColor) initGroup(groupColor *GroupColor) error {
-	if groupColor == nil {
-		return fmt.Errorf("Group does not support color")
-	}
-
-	apiColor.groupColor = groupColor
-
-	return nil
-}
-
-func (apiColor *APIColor) Apply() error {
-	if apiColor.ScaleIntensity != nil {
-		apiColor.Color = apiColor.Color.ScaleIntensity(*apiColor.ScaleIntensity)
-	}
-
-	if apiColor.headColor != nil {
-		apiColor.Color = apiColor.headColor.Set(apiColor.Color)
-	}
-
-	if apiColor.groupColor != nil {
-		apiColor.Color = apiColor.groupColor.Set(apiColor.Color)
-	}
-
-	return nil
+func (view *colorView) PostREST() (web.Resource, error) {
+	return view.handler.SetColor(view.params), nil
 }

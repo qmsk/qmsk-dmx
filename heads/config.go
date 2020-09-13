@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/dmx/logging"
 )
 
@@ -29,6 +30,8 @@ func load(obj interface{}, path string) error {
 		if err := loadToml(obj, path); err != nil {
 			return fmt.Errorf("Load %T file %v: %v", obj, path, err)
 		} else {
+			logging.Log.Infof("load %v: %T<%v>", path, obj, obj)
+
 			return nil
 		}
 	default:
@@ -36,10 +39,10 @@ func load(obj interface{}, path string) error {
 	}
 }
 
-type configMapper func(id []string) (configObject interface{}, err error)
+type walkFunc func(path string, id []string) error
 
 // Load config from given path, using the given stat info
-func loadsStat(path string, stat os.FileInfo, mapper configMapper, prefix []string, top bool) error {
+func walkStat(path string, stat os.FileInfo, f walkFunc, prefix []string, top bool) error {
 	name := stat.Name()
 
 	if stat.IsDir() {
@@ -54,7 +57,7 @@ func loadsStat(path string, stat os.FileInfo, mapper configMapper, prefix []stri
 			id = append(id, name)
 		}
 
-		return loadsDir(path, mapper, id)
+		return walkDir(path, f, id)
 
 	} else {
 		// take basename *.ext part
@@ -72,20 +75,16 @@ func loadsStat(path string, stat os.FileInfo, mapper configMapper, prefix []stri
 
 		logging.Log.Debugf("heads:loadOne path=%v: file id=%v", path, id)
 
-		if obj, err := mapper(id); err != nil {
-			return err
-		} else if err := load(obj, path); err != nil {
+		if err := f(path, id); err != nil {
 			return err
 		} else {
-			logging.Log.Infof("heads:loads path=%v: %T %v ", path, obj, id)
-
 			return nil
 		}
 	}
 }
 
 // Recursively load multiple config files from a directory
-func loadsDir(dirPath string, mapper configMapper, prefix []string) error {
+func walkDir(dirPath string, f walkFunc, prefix []string) error {
 	if files, err := ioutil.ReadDir(dirPath); err != nil {
 		return fmt.Errorf("read dir %v: %v", dirPath, err)
 	} else {
@@ -104,7 +103,7 @@ func loadsDir(dirPath string, mapper configMapper, prefix []string) error {
 				continue
 			}
 
-			if err := loadsStat(path, stat, mapper, prefix, false); err != nil {
+			if err := walkStat(path, stat, f, prefix, false); err != nil {
 				return err
 			}
 		}
@@ -114,147 +113,145 @@ func loadsDir(dirPath string, mapper configMapper, prefix []string) error {
 }
 
 // Load config from path, which may either be a file, or a directory to be loaded recursively
-func loads(path string, mapper configMapper) error {
+func walk(path string, f walkFunc) error {
 	if stat, err := os.Stat(path); err != nil {
 		return err
 	} else {
-		return loadsStat(path, stat, mapper, nil, true)
+		return walkStat(path, stat, f, nil, true)
 	}
 }
 
-type Config struct {
-	HeadTypes map[TypeID]*HeadType
-	Colors    map[ColorID]*Color
+type loadConfig api.Config
 
-	Heads  map[HeadID]*HeadConfig
-	Groups map[GroupID]*GroupConfig
+func (loadConfig *loadConfig) loadTypes(path string) error {
+	return walk(path, func(path string, id []string) error {
+		var typeID = api.TypeID(filepath.Join(id...))
+		var headType api.HeadType
 
-	Presets map[PresetID]*PresetConfig
-}
-
-func (config *Config) loadTypes(path string) error {
-	return loads(path, func(id []string) (interface{}, error) {
-		var typeID = TypeID(filepath.Join(id...))
-		var headType = new(HeadType)
-
-		config.HeadTypes[typeID] = headType
-
-		return headType, nil
+		if err := load(&headType, path); err != nil {
+			return err
+		} else {
+			loadConfig.HeadTypes[typeID] = headType
+		}
 	})
 }
 
-func (config *Config) load(path string) error {
-	return loads(path, func(id []string) (interface{}, error) {
-		if len(id) == 0 {
-			return config, nil
+func (loadConfig *loadConfig) load(path string) error {
+	return walk(path, func(path string, id []string) error {
+		var typ string
+		var name string
+
+		if len(id) > 0 {
+			typ = id[0]
 		}
-		switch id[0] {
+		if len(id) > 1 {
+			typ = typ + "/*"
+			name = filepath.Join(id[1:]...)
+		}
+
+		switch typ {
+		case "":
+			return load(loadConfig, path)
+
 		case "colors":
-			if len(id) == 1 {
-				return &config.Colors, nil
+			return load(&loadConfig.Colors, path)
+
+		case "colors/*":
+			var color api.Color
+
+			if err := load(&color, path); err != nil {
+				return err
 			} else {
-				var color = new(Color)
-
-				config.Colors[ColorID(filepath.Join(id[1:]...))] = color
-
-				return color, nil
+				loadConfig.Colors[api.ColorID(name)] = color
 			}
 
 		case "heads":
-			if len(id) == 1 {
-				return &config.Heads, nil
+			return load(&loadConfig.Heads, path)
+
+		case "heads/*":
+			var headConfig api.HeadConfig
+
+			if err := load(&headConfig, path); err != nil {
+				return err
 			} else {
-				var head = new(HeadConfig)
-
-				config.Heads[HeadID(filepath.Join(id[1:]...))] = head
-
-				return head, nil
+				loadConfig.Heads[api.HeadID(name)] = headConfig
 			}
 
 		case "groups":
-			if len(id) == 1 {
-				return &config.Groups, nil
+			return load(&loadConfig.Groups, path)
+
+		case "groups/*":
+			var groupConfig api.GroupConfig
+
+			if err := load(&groupConfig, path); err != nil {
+				return err
 			} else {
-				var group = new(GroupConfig)
-
-				config.Groups[GroupID(filepath.Join(id[1:]...))] = group
-
-				return group, nil
+				loadConfig.Groups[api.GroupID(name)] = groupConfig
 			}
 
 		case "presets":
-			if len(id) == 1 {
-				return &config.Presets, nil
+			return load(&loadConfig.Presets, path)
+
+		case "presets/*":
+			var presetConfig api.PresetConfig
+
+			if err := load(&presetConfig, path); err != nil {
+				return err
 			} else {
-				var preset = new(PresetConfig)
-
-				config.Presets[PresetID(filepath.Join(id[1:]...))] = preset
-
-				return preset, nil
+				loadConfig.Presets[api.PresetID(name)] = presetConfig
 			}
 
 		default:
-			return nil, fmt.Errorf("Bad config path: %v", id)
+			return fmt.Errorf("Unkonwn config %v: %v", id, path)
 		}
-	})
 
+		return nil
+	})
 }
 
 // map relative Head.Type= references
-func (config *Config) mapTypes() error {
-	// clone to ColorMap without pointers
-	var colors = make(ColorMap)
-	for colorID, color := range config.Colors {
-		colors[colorID] = *color
+func loadHeadType(config api.Config, headConfig api.HeadConfig) (api.HeadType, error) {
+	if headType, exists := config.HeadTypes[headConfig.Type]; !exists {
+		return headType, fmt.Errorf("Unknown Type=%v", headConfig.Type)
+	} else {
+		// merge over global colors
+		headType.Colors = config.Colors.Merge(headType.Colors)
+
+		return headType, nil
 	}
+}
 
-	// inherit colors
-	for _, headType := range config.HeadTypes {
-		if !headType.IsColor() {
-			continue
-		}
+// Config
+func loadHeadID(headID api.HeadID, index int) api.HeadID {
+	return api.HeadID(fmt.Sprintf("%s.%d", headID, index+1))
+}
 
-		if headType.Colors == nil {
-			headType.Colors = make(ColorMap)
-		}
+func loadHeadConfig(headConfig api.HeadConfig, index int, headType api.HeadType) api.HeadConfig {
+	var step = len(headType.Channels)
 
-		// each headType has its own copy
-		headType.Colors.Merge(colors)
-	}
+	headConfig.Address = headConfig.Address + api.DMXAddress(index*step)
 
+	return headConfig
+}
+
+func loadHeads(config api.Config, f func(headID api.HeadID, headConfig api.HeadConfig, headType api.HeadType) error) error {
 	for headID, headConfig := range config.Heads {
-		if headType, exists := config.HeadTypes[headConfig.Type]; !exists {
-			return fmt.Errorf("heads.%s: Invalid Head.Type=%v", headID, headConfig.Type)
+		var err error
+
+		if headType, headTypeErr := loadHeadType(config, headConfig); headTypeErr != nil {
+			err = headTypeErr
+		} else if headConfig.Count == 0 {
+			err = f(headID, headConfig, headType)
 		} else {
-			headConfig.headType = headType
+			for index := 0; index < int(headConfig.Count); index++ {
+				err = f(loadHeadID(headID, index), loadHeadConfig(headConfig, index, headType), headType)
+			}
+		}
+
+		if err != nil {
+			return fmt.Errorf("Load head %v: %v", headID, err)
 		}
 	}
 
 	return nil
-}
-
-func (options Options) Config(path string) (*Config, error) {
-	var config = Config{
-		HeadTypes: make(map[TypeID]*HeadType),
-		Colors:    make(map[ColorID]*Color),
-		Heads:     make(map[HeadID]*HeadConfig),
-		Groups:    make(map[GroupID]*GroupConfig),
-		Presets:   make(map[PresetID]*PresetConfig),
-	}
-
-	for _, libraryPath := range options.LibraryPath {
-		if err := config.loadTypes(libraryPath); err != nil {
-			return nil, fmt.Errorf("loadTypes %v: %v", libraryPath, err)
-		}
-	}
-
-	if err := config.load(path); err != nil {
-		return nil, err
-	}
-
-	if err := config.mapTypes(); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
 }

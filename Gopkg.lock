@@ -19,6 +19,12 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/gorilla/schema"
+  packages = ["."]
+  revision = "b0e8c201c781a2ff27702d53885093aefb15b623"
+  version = "v1.0.1"
+
+[[projects]]
   name = "github.com/jessevdk/go-flags"
   packages = ["."]
   revision = "460c7bb0abd6e927f2767cadc91aa6ef776a98b4"
@@ -35,10 +41,16 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/qmsk/go-logging"
+  packages = ["."]
+  revision = "69543e686d5be4cd70a1628e49fbca86308e3fcb"
+  version = "v0.1.0"
+
+[[projects]]
   name = "github.com/qmsk/go-web"
   packages = ["."]
-  revision = "b8620920c43c463bea270aa53914b6918adc2bac"
-  version = "v0.1.0"
+  revision = "0eebe52e538250744b98dc31e840bc5344be567b"
+  version = "v0.2.0"
 
 [[projects]]
   name = "github.com/stretchr/objx"
@@ -69,6 +81,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0aed30493f39d1c5159c221532ae7800809447a98673542e0739326c34aed5ba"
+  inputs-digest = "9bdc9ed0abd6bd567112741fa34fe653296550a056fb882dde949c6b7c824e33"
   solver-name = "gps-cdcl"
   solver-version = 1

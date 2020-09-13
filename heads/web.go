@@ -3,56 +3,50 @@ package heads
 import (
 	"net/http"
 
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/go-web"
 )
 
-type API struct {
-	Outputs APIOutputs
-	Heads   APIHeads
-	Groups  APIGroups
-	Presets presetMap
+func (controller *Controller) WebAPI() web.API {
+	return web.MakeAPI(controller)
 }
 
-func (heads *Heads) WebAPI() web.API {
-	return web.MakeAPI(heads)
-}
-
-func (heads *Heads) Index(name string) (web.Resource, error) {
+func (controller *Controller) Index(name string) (web.Resource, error) {
 	switch name {
 	case "":
-		return heads, nil
+		return controller, nil
 	case "groups":
-		return heads.groups, nil
+		return &groupsView{controller.groups}, nil
 	case "outputs":
-		return heads.outputs, nil
+		return &outputsView{controller.outputs}, nil
 	case "heads":
-		return heads.heads, nil
+		return &headsView{controller.heads}, nil
 	case "presets":
-		return heads.presets, nil
+		return controller.presets, nil
 	default:
 		return nil, nil
 	}
 }
 
-func (heads *Heads) makeAPI() API {
-	return API{
-		Outputs: heads.outputs.makeAPI(),
-		Heads:   heads.heads.makeAPI(),
-		Groups:  heads.groups.makeAPI(),
-		Presets: heads.presets,
+func (controller *Controller) makeAPI() api.Index {
+	return api.Index{
+		Outputs: controller.outputs.makeAPI(),
+		Heads:   controller.heads.makeAPI(),
+		Groups:  controller.groups.makeAPI(),
+		Presets: controller.presets.makeAPI(),
 	}
 }
 
-func (heads *Heads) GetREST() (web.Resource, error) {
-	return heads.makeAPI(), nil
+func (controller *Controller) GetREST() (web.Resource, error) {
+	return controller.makeAPI(), nil
 }
 
-func (heads *Heads) Apply() error {
-	heads.log.Info("Apply")
+func (controller *Controller) Apply() error {
+	controller.log.Info("Apply")
 
 	// Refresh DMX output
-	if err := heads.Refresh(); err != nil {
-		heads.log.Warn("Refresh: ", err)
+	if err := controller.Refresh(); err != nil {
+		controller.log.Warn("Refresh: ", err)
 
 		return err
 	}
@@ -60,6 +54,6 @@ func (heads *Heads) Apply() error {
 	return nil
 }
 
-func (heads *Heads) WebConfigPreset() http.Handler {
-	return httpConfigPreset{heads}
+func (controller *Controller) WebConfigPreset() http.Handler {
+	return httpConfigPreset{controller}
 }

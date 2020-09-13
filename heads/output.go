@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/qmsk/dmx"
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/dmx/logging"
 	"github.com/qmsk/go-web"
 )
@@ -17,20 +18,30 @@ type OutputConfig struct {
 	Artnet interface{} // metadata
 }
 
-type outputMap map[Universe]*Output
+type outputs map[api.Universe]*Output
 
-func (outputMap outputMap) makeAPI() APIOutputs {
-	var apiOutputs = make(APIOutputs)
+func (outputs outputs) Refresh() {
+	for _, output := range outputs {
+		output.Refresh()
+	}
+}
 
-	for _, output := range outputMap {
-		apiOutputs[output.String()] = output.makeAPI()
+func (outputs outputs) makeAPI() api.Outputs {
+	var apiOutputs = make(api.Outputs)
+
+	for _, output := range outputs {
+		apiOutputs[api.OutputID(output.String())] = output.makeAPI()
 	}
 
 	return apiOutputs
 }
 
-func (outputMap outputMap) GetREST() (web.Resource, error) {
-	return outputMap.makeAPI(), nil
+type outputsView struct {
+	outputs outputs
+}
+
+func (view outputsView) GetREST() (web.Resource, error) {
+	return view.outputs.makeAPI(), nil
 }
 
 type OutputConnection struct {
@@ -43,7 +54,7 @@ type Output struct {
 	log    logging.Logger
 	events Events
 
-	universe   Universe
+	universe   api.Universe
 	dmx        dmx.Universe
 	connection *OutputConnection
 }
@@ -52,7 +63,7 @@ func (output *Output) String() string {
 	return fmt.Sprintf("%d", output.universe)
 }
 
-func (output *Output) init(logger logging.Logger, universe Universe) {
+func (output *Output) init(logger logging.Logger, universe api.Universe) {
 	output.log = logger.Logger("universe", universe)
 	output.universe = universe
 	output.dmx = dmx.MakeUniverse()
@@ -70,16 +81,14 @@ func (output *Output) connect(config OutputConfig, dmxWriter dmx.Writer) {
 		output.connection.dmxWriter = dmxWriter
 	}
 
-	output.apply()
+	output.update()
 }
 
-func (output *Output) apply() {
-	var id = output.String()
+func (output *Output) update() {
+	var id = api.OutputID(output.String())
 
-	output.events.update(APIEvents{
-		Outputs: APIOutputs{
-			id: output.makeAPI(),
-		},
+	output.events.update(api.Event{
+		Outputs: api.Outputs{id: output.makeAPI()},
 	})
 }
 
@@ -122,29 +131,20 @@ func (output *Output) Refresh() error {
 	return nil
 }
 
-// Web API
-type APIOutputs map[string]APIOutput
-
-type APIOutput struct {
-	Universe  Universe
-	Connected *time.Time
-
-	*OutputConfig
-}
-
-func (output *Output) makeAPI() APIOutput {
-	var apiOutput = APIOutput{
+func (output *Output) makeAPI() api.Output {
+	var apiOutput = api.Output{
 		Universe: output.universe,
 	}
 
 	if output.connection != nil {
 		apiOutput.Connected = &output.connection.time
-		apiOutput.OutputConfig = &output.connection.config
+		apiOutput.OutputStatus = api.OutputStatus{
+			Seen:    output.connection.config.Seen,
+			Address: output.connection.config.Address,
+			Port:    output.connection.config.Port,
+			Artnet:  output.connection.config.Artnet,
+		}
 	}
 
 	return apiOutput
-}
-
-func (output *Output) GetREST() (web.Resource, error) {
-	return output.makeAPI(), nil
 }

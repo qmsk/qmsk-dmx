@@ -3,6 +3,7 @@ package heads
 import (
 	"net/http"
 
+	"github.com/qmsk/dmx/api"
 	"github.com/qmsk/dmx/logging"
 	"github.com/qmsk/go-web"
 
@@ -10,14 +11,12 @@ import (
 )
 
 // Config
-type PresetID string
-
 type PresetParameters struct {
-	head  *Head
-	group *Group
+	intensityHandler IntensityHandler
+	colorHandler     ColorHandler
 
-	Intensity *APIIntensity
-	Color     *APIColor
+	Intensity *api.IntensityParams
+	Color     *api.ColorParams
 }
 
 func (presetParameters PresetParameters) IsZero() bool {
@@ -47,212 +46,162 @@ func (presetParameters PresetParameters) Overrides(other PresetParameters) bool 
 	return false
 }
 
-func (presetParameters *PresetParameters) init() error {
+func (presetParameters PresetParameters) scale(scale api.Value) PresetParameters {
 	if presetParameters.Intensity != nil {
-		if presetParameters.group != nil {
-			if err := presetParameters.Intensity.initGroup(presetParameters.group.intensity); err != nil {
-				return err
-			}
-		}
-		if presetParameters.head != nil {
-			if err := presetParameters.Intensity.initHead(presetParameters.head.parameters.Intensity); err != nil {
-				return err
-			}
-		}
+		intensityParams := *presetParameters.Intensity
+		intensityParams.ScaleIntensity = &scale
+
+		presetParameters.Intensity = &intensityParams
 	}
 
 	if presetParameters.Color != nil {
-		if presetParameters.group != nil {
-			if err := presetParameters.Color.initGroup(presetParameters.group.color); err != nil {
-				return err
-			}
-		}
-		if presetParameters.head != nil {
-			if err := presetParameters.Color.initHead(presetParameters.head.parameters.Color); err != nil {
-				return err
-			}
-		}
-	}
+		colorParams := *presetParameters.Color
+		colorParams.ScaleIntensity = &scale
 
-	return nil
-}
-
-func (presetParameters PresetParameters) scaleIntensity(scaleIntensity Intensity) PresetParameters {
-	if presetParameters.Intensity != nil {
-		apiIntensity := *presetParameters.Intensity
-		apiIntensity.ScaleIntensity = &scaleIntensity
-
-		presetParameters.Intensity = &apiIntensity
-	}
-
-	if presetParameters.Color != nil {
-		apiColor := *presetParameters.Color
-		apiColor.ScaleIntensity = &scaleIntensity
-
-		presetParameters.Color = &apiColor
+		presetParameters.Color = &colorParams
 	}
 
 	return presetParameters
 }
 
-// requires initHead/initGroup
-func (presetParameters PresetParameters) Apply() error {
-	if presetParameters.Intensity == nil {
-
-	} else if err := presetParameters.Intensity.Apply(); err != nil {
-		return err
+func (params PresetParameters) apply() {
+	if params.intensityHandler != nil && params.Intensity != nil {
+		params.intensityHandler.SetIntensity(*params.Intensity)
 	}
 
-	if presetParameters.Color == nil {
+	if params.colorHandler != nil && params.Color != nil {
+		params.colorHandler.SetColor(*params.Color)
+	}
+}
 
-	} else if err := presetParameters.Color.Apply(); err != nil {
-		return err
+func (presetParameters PresetParameters) Set(params api.PresetParams) {
+
+}
+
+type presets map[api.PresetID]*Preset
+
+func (presets presets) Get() api.Presets {
+	var apiPresests = make(api.Presets)
+
+	for presetID, preset := range presets {
+		apiPresests[presetID] = preset.makeAPI()
 	}
 
-	return nil
+	return apiPresests
 }
 
-type PresetConfig struct {
-	Name   string
-	All    *PresetParameters
-	Groups map[string]PresetParameters
-	Heads  map[string]PresetParameters
+type presetsView struct {
+	presets presets
 }
 
-// Heads.Presets
-type presetMap map[PresetID]*Preset
-
-func (presetMap presetMap) GetREST() (web.Resource, error) {
-	return presetMap, nil
+func (view presetsView) GetREST() (web.Resource, error) {
+	return view.presets.makeAPI(), nil
 }
 
-func (presetMap presetMap) Index(name string) (web.Resource, error) {
-	return presetMap[PresetID(name)], nil
+func (view presetsView) Index(name string) (web.Resource, error) {
+	if name == "" {
+		return view, nil
+	} else if preset := view.presets[api.PresetID(name)]; preset != nil {
+		return &presetView{preset: preset}, nil
+	} else {
+		return nil, nil
+	}
 }
 
 type Preset struct {
 	log    logging.Logger
 	events Events
 
-	ID     PresetID
-	Config PresetConfig
+	id     api.PresetID
+	config api.PresetConfig
 
-	allHeads  headMap
-	allGroups groupMap
-	Groups    map[GroupID]PresetParameters
-	Heads     map[HeadID]PresetParameters
+	allHeads  heads
+	allGroups groups
+	groups    map[api.GroupID]PresetParameters
+	heads     map[api.HeadID]PresetParameters
 }
 
-func (preset *Preset) initAll(heads headMap, groups groupMap) {
+func (preset *Preset) initAll(heads heads, groups groups) {
 	preset.allHeads = heads
 	preset.allGroups = groups
 }
 
-func (preset *Preset) initGroup(group *Group, presetParameters PresetParameters) error {
+func (preset *Preset) initGroup(group *Group, params api.PresetConfigParams) error {
 	var groupParameters = PresetParameters{
-		group:     group,
-		Intensity: presetParameters.Intensity,
-		Color:     presetParameters.Color,
+		intensityHandler: group.intensity,
+		colorHandler:     group.color,
+
+		Intensity: params.Intensity,
+		Color:     params.Color,
 	}
 
-	if err := groupParameters.init(); err != nil {
-		return err
-	}
-
-	preset.Groups[group.id] = groupParameters
+	preset.groups[group.id] = groupParameters
 
 	return nil
 }
 
-func (preset *Preset) initHead(head *Head, presetParameters PresetParameters) error {
+func (preset *Preset) initHead(head *Head, params api.PresetConfigParams) error {
 	var headParameters = PresetParameters{
-		head:      head,
-		Intensity: presetParameters.Intensity,
-		Color:     presetParameters.Color,
+		intensityHandler: head.intensity,
+		colorHandler:     head.color,
+
+		Intensity: params.Intensity,
+		Color:     params.Color,
 	}
 
-	if err := headParameters.init(); err != nil {
-		return err
-	}
-
-	preset.Heads[head.id] = headParameters
+	preset.heads[head.id] = headParameters
 
 	return nil
 }
 
-func (preset *Preset) GetREST() (web.Resource, error) {
-	return preset, nil
+func (preset *Preset) Get() api.Preset {
+	return api.Preset{
+		ID:     preset.id,
+		Config: preset.config,
+
+		Groups: preset.config.Groups,
+		Heads:  preset.config.Heads,
+	}
 }
 
-func (preset *Preset) PostREST() (web.Resource, error) {
-	return &APIPresetParams{preset: preset}, nil
-}
-
-// API POST
-type APIPresetParams struct {
-	preset *Preset
-
-	Intensity *Intensity
-}
-
-func (apiPresetParams APIPresetParams) Apply() error {
-	var preset = apiPresetParams.preset
-	var event APIEvents
+func (preset *Preset) Set(params api.PresetParams) error {
+	var event eventBuilder
 
 	preset.log.Info("Apply")
 
 	if allParams := preset.Config.All; allParams != nil {
+		if params.Intensity != nil {
+			allParams = allParams.Scale(*params.Intensity)
+		}
+
 		for _, head := range preset.allHeads {
-			var headParams = PresetParameters{
-				head: head,
-			}
-
 			// all params are optional
-			if allParams.Intensity != nil && head.parameters.Intensity != nil {
-				headParams.Intensity = allParams.Intensity
+			if allParams.Intensity != nil && head.intensity != nil {
+				head.intensity.SetIntensity(*params.Intensity)
 			}
 
-			if allParams.Color != nil && head.parameters.Color != nil {
-				headParams.Color = allParams.Color
-			}
-
-			if apiPresetParams.Intensity != nil {
-				headParams = headParams.scaleIntensity(*apiPresetParams.Intensity)
-			}
-
-			if err := headParams.init(); err != nil {
-				return err
-			} else if err := headParams.Apply(); err != nil {
-				return err
+			if allParams.Color != nil && head.color != nil {
+				head.color.SetColor(*params.Color)
 			}
 		}
 
 		// update everything
 		event.addHeads(preset.allHeads)
 		event.addGroups(preset.allGroups)
-
-		// also update groups after heads have been updated
-		for _, group := range apiPresetParams.preset.allGroups {
-			if err := group.Apply(); err != nil {
-				return err
-			}
-		}
 	}
 
-	for _, apiGroupParams := range apiPresetParams.preset.Groups {
+	for _, groupParams := range preset.groups {
 		if apiPresetParams.Intensity != nil {
 			apiGroupParams = apiGroupParams.scaleIntensity(*apiPresetParams.Intensity)
 		}
 
-		if err := apiGroupParams.Apply(); err != nil {
-			return err
-		}
+		groupParams.apply()
 
 		event.addGroup(apiGroupParams.group)
 		event.addHeads(apiGroupParams.group.heads)
 	}
 
-	for _, apiHeadParams := range apiPresetParams.preset.Heads {
+	for _, headParams := range preset.heads {
 		if apiPresetParams.Intensity != nil {
 			apiHeadParams = apiHeadParams.scaleIntensity(*apiPresetParams.Intensity)
 		}
@@ -272,11 +221,11 @@ func (apiPresetParams APIPresetParams) Apply() error {
 
 // GET /config/preset.toml
 type httpConfigPreset struct {
-	heads *Heads
+	controller *Controller
 }
 
 // Export a preset configuration from the current state
-func (heads *Heads) ConfigPreset() PresetConfig {
+func (controller *Controller) ConfigPreset() api.PresetConfig {
 	var allParameters = PresetParameters{
 		Intensity: &APIIntensity{},
 		Color:     &APIColor{},
@@ -288,7 +237,7 @@ func (heads *Heads) ConfigPreset() PresetConfig {
 		Heads:  make(map[string]PresetParameters),
 	}
 
-	for groupID, group := range heads.groups {
+	for groupID, group := range controller.groups {
 		var presetParameters = PresetParameters{
 			Intensity: group.intensity.makeAPI(),
 			Color:     group.color.makeAPI(),
@@ -303,7 +252,7 @@ func (heads *Heads) ConfigPreset() PresetConfig {
 		presetConfig.Groups[string(groupID)] = presetParameters
 	}
 
-	for headID, head := range heads.heads {
+	for headID, head := range controller.heads {
 		var presetParameters = PresetParameters{
 			Intensity: head.parameters.Intensity.makeAPI(),
 			Color:     head.parameters.Color.makeAPI(),

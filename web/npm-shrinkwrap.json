@@ -1,116 +1,148 @@
 {
   "name": "qmsk-dmx",
   "version": "0.0.1",
+  "lockfileVersion": 1,
+  "requires": true,
   "dependencies": {
     "@angular/common": {
       "version": "4.3.3",
-      "from": "@angular/common@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/common/-/common-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/common/-/common-4.3.3.tgz",
+      "integrity": "sha1-H6++ozr066TN3YZ371eg92pQSIw=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/compiler": {
       "version": "4.3.3",
-      "from": "@angular/compiler@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/compiler/-/compiler-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/compiler/-/compiler-4.3.3.tgz",
+      "integrity": "sha1-jBWC/iinhEATJeUaBKmza2cSAz4=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/core": {
       "version": "4.3.3",
-      "from": "@angular/core@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/core/-/core-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/core/-/core-4.3.3.tgz",
+      "integrity": "sha1-jmp2kUZh20B/otiN0kQcTAFv9iU=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/forms": {
       "version": "4.3.3",
-      "from": "@angular/forms@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/forms/-/forms-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/forms/-/forms-4.3.3.tgz",
+      "integrity": "sha1-CRKuu4GKF29OCLffDsn9QCHvy2s=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/http": {
       "version": "4.3.3",
-      "from": "@angular/http@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/http/-/http-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/http/-/http-4.3.3.tgz",
+      "integrity": "sha1-y+NjkBA2K2gQdvC2Bmc6DmL9lA0=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/platform-browser": {
       "version": "4.3.3",
-      "from": "@angular/platform-browser@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/platform-browser/-/platform-browser-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/platform-browser/-/platform-browser-4.3.3.tgz",
+      "integrity": "sha1-Yjtll5TweQltT3aFtL68tJ47mnE=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/platform-browser-dynamic": {
       "version": "4.3.3",
-      "from": "@angular/platform-browser-dynamic@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/platform-browser-dynamic/-/platform-browser-dynamic-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/platform-browser-dynamic/-/platform-browser-dynamic-4.3.3.tgz",
+      "integrity": "sha1-sWwJ3+l7W4PaoFgbIz9eo8Pu+zo=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@angular/router": {
       "version": "4.3.3",
-      "from": "@angular/router@4.3.3",
-      "resolved": "https://registry.npmjs.org/@angular/router/-/router-4.3.3.tgz"
+      "resolved": "https://registry.npmjs.org/@angular/router/-/router-4.3.3.tgz",
+      "integrity": "sha1-8/kATsMbT+TRVHfh5j4RjfNq1G0=",
+      "requires": {
+        "tslib": "^1.7.1"
+      }
     },
     "@types/lodash": {
       "version": "4.14.71",
-      "from": "@types/lodash@>=4.14.59 <5.0.0",
-      "resolved": "https://registry.npmjs.org/@types/lodash/-/lodash-4.14.71.tgz"
+      "resolved": "https://registry.npmjs.org/@types/lodash/-/lodash-4.14.71.tgz",
+      "integrity": "sha512-x9E8HYuhmcQJPjhTd+t0oRXiQCJXoRPSzCOgYKggxtvNb/kGw8RrbdZzCXrQ6i/i4o0TettxyouY7UdbqkS4AQ==",
+      "dev": true
     },
     "@types/node": {
       "version": "8.0.19",
-      "from": "@types/node@8.0.19",
-      "resolved": "https://registry.npmjs.org/@types/node/-/node-8.0.19.tgz"
+      "resolved": "https://registry.npmjs.org/@types/node/-/node-8.0.19.tgz",
+      "integrity": "sha512-VRQB+Q0L3YZWs45uRdpN9oWr82meL/8TrJ6faoKT5tp0uub2l/aRMhtm5fo68h7kjYKH60f9/bay1nF7ZpTW5g==",
+      "dev": true
     },
     "core-js": {
       "version": "2.4.1",
-      "from": "core-js@>=2.4.1 <3.0.0",
-      "resolved": "https://registry.npmjs.org/core-js/-/core-js-2.4.1.tgz"
+      "resolved": "https://registry.npmjs.org/core-js/-/core-js-2.4.1.tgz",
+      "integrity": "sha1-TekR5mew6ukSTjQlS1OupvxhjT4="
     },
     "lodash": {
-      "version": "4.17.4",
-      "from": "lodash@4.17.4",
-      "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.4.tgz"
+      "version": "4.17.21",
+      "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+      "integrity": "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg=="
     },
     "material-design-icons": {
       "version": "3.0.1",
-      "from": "material-design-icons@latest",
-      "resolved": "https://registry.npmjs.org/material-design-icons/-/material-design-icons-3.0.1.tgz"
+      "resolved": "https://registry.npmjs.org/material-design-icons/-/material-design-icons-3.0.1.tgz",
+      "integrity": "sha1-mnHEh0chjrylHlGmbaaCA4zct78="
     },
     "normalize.css": {
       "version": "7.0.0",
-      "from": "normalize.css@7.0.0",
-      "resolved": "https://registry.npmjs.org/normalize.css/-/normalize.css-7.0.0.tgz"
+      "resolved": "https://registry.npmjs.org/normalize.css/-/normalize.css-7.0.0.tgz",
+      "integrity": "sha1-q/sd2CRwZ04DIrU86xqvQSk45L8="
     },
     "reflect-metadata": {
       "version": "0.1.10",
-      "from": "reflect-metadata@0.1.10",
-      "resolved": "https://registry.npmjs.org/reflect-metadata/-/reflect-metadata-0.1.10.tgz"
+      "resolved": "https://registry.npmjs.org/reflect-metadata/-/reflect-metadata-0.1.10.tgz",
+      "integrity": "sha1-tPg3BEFqytiZiMmxVjXUfgO5NEo="
     },
     "rxjs": {
       "version": "5.4.2",
-      "from": "rxjs@>=5.0.1 <6.0.0",
-      "resolved": "https://registry.npmjs.org/rxjs/-/rxjs-5.4.2.tgz"
+      "resolved": "https://registry.npmjs.org/rxjs/-/rxjs-5.4.2.tgz",
+      "integrity": "sha1-KjI2/L8D31e64G/Wly/ZnlwI/Pc=",
+      "requires": {
+        "symbol-observable": "^1.0.1"
+      }
     },
     "spinkit": {
       "version": "1.2.5",
-      "from": "spinkit@latest",
-      "resolved": "https://registry.npmjs.org/spinkit/-/spinkit-1.2.5.tgz"
+      "resolved": "https://registry.npmjs.org/spinkit/-/spinkit-1.2.5.tgz",
+      "integrity": "sha1-kPn0ZqIOjjnvJNqVnB5hHCow3VQ="
     },
     "symbol-observable": {
       "version": "1.0.4",
-      "from": "symbol-observable@>=1.0.1 <2.0.0",
-      "resolved": "https://registry.npmjs.org/symbol-observable/-/symbol-observable-1.0.4.tgz"
+      "resolved": "https://registry.npmjs.org/symbol-observable/-/symbol-observable-1.0.4.tgz",
+      "integrity": "sha1-Kb9hXUqnEhvdiYsi1LP5vE4qoD0="
     },
     "systemjs": {
       "version": "0.20.17",
-      "from": "systemjs@0.20.17",
-      "resolved": "https://registry.npmjs.org/systemjs/-/systemjs-0.20.17.tgz"
+      "resolved": "https://registry.npmjs.org/systemjs/-/systemjs-0.20.17.tgz",
+      "integrity": "sha512-AK1DBQvn+TaHWPLjZxXE81Y9VCzhu9grs7z/wKYoYp8qV+voasqmjHxZRuK9ZnoJGtrLlLqMcCBjyqErRchWIA=="
     },
     "tslib": {
       "version": "1.7.1",
-      "from": "tslib@>=1.7.1 <2.0.0",
-      "resolved": "https://registry.npmjs.org/tslib/-/tslib-1.7.1.tgz"
+      "resolved": "https://registry.npmjs.org/tslib/-/tslib-1.7.1.tgz",
+      "integrity": "sha1-vIAEFkaRkjp5/oN4u+s9ogF1OOw="
     },
     "typescript": {
       "version": "2.4.2",
-      "from": "typescript@>=2.2.0 <3.0.0",
-      "resolved": "https://registry.npmjs.org/typescript/-/typescript-2.4.2.tgz"
+      "resolved": "https://registry.npmjs.org/typescript/-/typescript-2.4.2.tgz",
+      "integrity": "sha1-+DlfhdRZJ2BnyYiqQYN6j4KHCEQ=",
+      "dev": true
     },
     "zone.js": {
       "version": "0.8.16",
-      "from": "zone.js@0.8.16",
-      "resolved": "https://registry.npmjs.org/zone.js/-/zone.js-0.8.16.tgz"
+      "resolved": "https://registry.npmjs.org/zone.js/-/zone.js-0.8.16.tgz",
+      "integrity": "sha1-rDG2xBj4jA+Ritas2KQCrKkxOrs="
     }
   }
 }
